@@ -1,0 +1,6 @@
+{
+  "name": "StudentHub - Student Personal Dashboard",
+  "description": "แดชบอร์ดส่วนตัวสำหรับนักเรียน จัดตารางเรียน ตารางการบ้าน เป้าหมายรายวัน สรุปบทเรียน AI และวิเคราะห์จุดอ่อน รองรับโหมดมืดและการแจ้งเตือน",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,332 @@
+{
+  "entities": {
+    "userProfile": {
+      "title": "UserProfile",
+      "description": "Student profile, preferences, and school settings",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth user ID"
+        },
+        "email": {
+          "type": "string",
+          "description": "Student email address"
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Student display name or nickname"
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Avatar image URL"
+        },
+        "provider": {
+          "type": "string",
+          "enum": ["google", "line", "facebook", "guest"],
+          "description": "Authentication method used"
+        },
+        "school": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "School or university name"
+        },
+        "grade": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Grade or academic year"
+        },
+        "themePreference": {
+          "type": "string",
+          "enum": ["light", "dark", "system"],
+          "description": "Dark mode / light mode preference"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of account creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of profile update"
+        }
+      },
+      "required": ["uid", "email"]
+    },
+    "timetableItem": {
+      "title": "TimetableItem",
+      "description": "Individual recurring or specific class period in student schedule",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner student user ID"
+        },
+        "dayOfWeek": {
+          "type": "string",
+          "enum": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+          "description": "Day of the week for the class"
+        },
+        "subject": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Subject name (e.g. Mathematics, Physics, English)"
+        },
+        "subjectCode": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Course code (e.g. MATH101, ว30101)"
+        },
+        "room": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Classroom or lab location"
+        },
+        "teacher": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Teacher or professor name"
+        },
+        "startTime": {
+          "type": "string",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "description": "Start time in HH:mm 24-hour format"
+        },
+        "endTime": {
+          "type": "string",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "description": "End time in HH:mm 24-hour format"
+        },
+        "color": {
+          "type": "string",
+          "maxLength": 30,
+          "description": "Subject color badge code or hex"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Extra note or textbook requirements"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["userId", "dayOfWeek", "subject", "startTime", "endTime"]
+    },
+    "homeworkItem": {
+      "title": "HomeworkItem",
+      "description": "Homework or assignment with due date, priority, and progress",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Student owner ID"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 150,
+          "description": "Assignment title"
+        },
+        "subject": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Subject name"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Details, rubric, or assignment prompt"
+        },
+        "dueDate": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "Submission date YYYY-MM-DD"
+        },
+        "dueTime": {
+          "type": "string",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+          "description": "Submission time HH:mm"
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "urgent"],
+          "description": "Task urgency"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_progress", "completed"],
+          "description": "Current status"
+        },
+        "estimatedMinutes": {
+          "type": "number",
+          "description": "Estimated minutes required to finish"
+        },
+        "aiScheduledSlot": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "AI recommendation for optimal study time"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last modified timestamp"
+        }
+      },
+      "required": ["userId", "title", "subject", "dueDate", "status"]
+    },
+    "dailyGoal": {
+      "title": "DailyGoal",
+      "description": "Daily study targets and focus goals",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Student ID"
+        },
+        "date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "Goal target date YYYY-MM-DD"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 150,
+          "description": "Target goal description"
+        },
+        "isCompleted": {
+          "type": "boolean",
+          "description": "Whether goal has been achieved"
+        },
+        "targetMinutes": {
+          "type": "number",
+          "description": "Target focus time in minutes"
+        },
+        "completedMinutes": {
+          "type": "number",
+          "description": "Actual minutes studied so far"
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Category: Homework, Review, Exam Prep, Project"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["userId", "date", "title"]
+    },
+    "studySummary": {
+      "title": "StudySummary",
+      "description": "AI summarized lessons and study revision notes",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Student ID"
+        },
+        "subject": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Subject"
+        },
+        "topic": {
+          "type": "string",
+          "maxLength": 150,
+          "description": "Topic or lesson chapter title"
+        },
+        "originalNotes": {
+          "type": "string",
+          "maxLength": 10000,
+          "description": "Original text or lecture notes submitted"
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 10000,
+          "description": "Structured AI summary points"
+        },
+        "keyFormulas": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "Important formulas or concepts"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["userId", "subject", "topic", "summary"]
+    },
+    "quizResult": {
+      "title": "QuizResult",
+      "description": "Mock exam test results and weakness analytics",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Student ID"
+        },
+        "subject": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Subject tested"
+        },
+        "topic": {
+          "type": "string",
+          "maxLength": 150,
+          "description": "Topic of the test"
+        },
+        "score": {
+          "type": "number",
+          "description": "Correct answers count"
+        },
+        "totalQuestions": {
+          "type": "number",
+          "description": "Total question count"
+        },
+        "weaknessAnalysis": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "AI generated diagnostics of mistakes and recommended improvement focus"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when quiz was taken"
+        }
+      },
+      "required": ["userId", "subject", "topic", "score", "totalQuestions"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "userProfile",
+      "description": "User profile collection isolated per authenticated student"
+    },
+    "/timetable/{timetableId}": {
+      "schema": "timetableItem",
+      "description": "Timetable items belonging to students"
+    },
+    "/homework/{homeworkId}": {
+      "schema": "homeworkItem",
+      "description": "Homework items and deadlines per student"
+    },
+    "/dailyGoals/{goalId}": {
+      "schema": "dailyGoal",
+      "description": "Daily study goals and completion status"
+    },
+    "/studySummaries/{summaryId}": {
+      "schema": "studySummary",
+      "description": "Study summaries and AI study notes"
+    },
+    "/quizResults/{resultId}": {
+      "schema": "quizResult",
+      "description": "Mock exam quiz test history and score records"
+    }
+  }
+}
