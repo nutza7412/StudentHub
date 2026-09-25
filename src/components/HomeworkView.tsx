@@ -26,6 +26,7 @@ interface HomeworkViewProps {
   isAddModalOpen: boolean;
   setIsAddModalOpen: (open: boolean) => void;
   onOpenAiPlanner: () => void;
+  onUpdateHomework?: React.Dispatch<React.SetStateAction<HomeworkItem[]>>;
 }
 
 const PRIORITY_BADGES: Record<HomeworkPriority, { label: string; color: string; badge: string }> = {
@@ -47,6 +48,7 @@ export const HomeworkView: React.FC<HomeworkViewProps> = ({
   isAddModalOpen,
   setIsAddModalOpen,
   onOpenAiPlanner,
+  onUpdateHomework,
 }) => {
   const todayStr = getTodayString();
   const [statusFilter, setStatusFilter] = useState<'all' | HomeworkStatus>('all');
@@ -115,6 +117,13 @@ export const HomeworkView: React.FC<HomeworkViewProps> = ({
       updatedAt: new Date().toISOString(),
     };
 
+    if (onUpdateHomework) {
+      onUpdateHomework((prev) => {
+        const idx = prev.findIndex((x) => x.id === itemToSave.id);
+        return idx >= 0 ? prev.map((x) => (x.id === itemToSave.id ? itemToSave : x)) : [...prev, itemToSave];
+      });
+    }
+
     await StudentDataService.saveHomeworkItem(itemToSave);
     setIsAddModalOpen(false);
   };
@@ -131,14 +140,25 @@ export const HomeworkView: React.FC<HomeworkViewProps> = ({
       });
     }
 
-    await StudentDataService.saveHomeworkItem({
+    const updatedItem: HomeworkItem = {
       ...item,
       status: nextStatus,
       updatedAt: new Date().toISOString(),
-    });
+    };
+
+    if (onUpdateHomework) {
+      onUpdateHomework((prev) =>
+        prev.map((h) => (h.id === item.id ? updatedItem : h))
+      );
+    }
+
+    await StudentDataService.saveHomeworkItem(updatedItem);
   };
 
   const handleDelete = async (id: string) => {
+    if (onUpdateHomework) {
+      onUpdateHomework((prev) => prev.filter((h) => h.id !== id));
+    }
     await StudentDataService.deleteHomeworkItem(id, user.uid);
   };
 
@@ -206,6 +226,48 @@ export const HomeworkView: React.FC<HomeworkViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Homework Overall Progress Bar */}
+      {homework.length > 0 && (
+        <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                ภาพรวมการส่งการบ้าน
+              </span>
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                (ส่งแล้ว {homework.filter((h) => h.status === 'completed').length} จาก {homework.length} ชิ้น)
+              </span>
+            </div>
+            <h2 className="text-base font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <span>ความคืบหน้าการเคลียร์งาน</span>
+              {homework.filter((h) => h.status === 'completed').length === homework.length && homework.length > 0 && (
+                <span className="text-xs font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 flex items-center gap-1 animate-bounce">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>ส่งครบหมดแล้ว! เยี่ยมมาก 🚀</span>
+                </span>
+              )}
+            </h2>
+          </div>
+
+          <div className="w-full sm:w-56 space-y-1.5">
+            <div className="flex justify-between text-xs font-extrabold">
+              <span className="text-slate-600 dark:text-slate-300">ความคืบหน้า</span>
+              <span className="text-emerald-600 dark:text-emerald-400">
+                {Math.round((homework.filter((h) => h.status === 'completed').length / homework.length) * 100)}%
+              </span>
+            </div>
+            <div className="w-full h-3 rounded-full bg-slate-100 dark:bg-slate-700/80 overflow-hidden p-0.5 border border-slate-200/60 dark:border-slate-700">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 transition-all duration-500 ease-out shadow-xs"
+                style={{
+                  width: `${(homework.filter((h) => h.status === 'completed').length / homework.length) * 100}%`,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filter Tabs & Search */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -313,17 +375,22 @@ export const HomeworkView: React.FC<HomeworkViewProps> = ({
                   {/* Title & Description */}
                   <div className="flex items-start gap-3">
                     <button
-                      onClick={() => handleToggleStatus(item)}
-                      className={`mt-0.5 w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleStatus(item);
+                      }}
+                      aria-label={isCompleted ? 'เปลี่ยนเป็นยังไม่เสร็จ' : 'ติ๊กถูกส่งการบ้านนี้'}
+                      className={`mt-0.5 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all cursor-pointer transform active:scale-90 shrink-0 ${
                         isCompleted
-                          ? 'bg-emerald-500 border-emerald-500 text-white'
-                          : 'border-slate-300 dark:border-slate-600 hover:border-emerald-500 text-transparent hover:text-emerald-500'
+                          ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm shadow-emerald-500/30'
+                          : 'border-slate-300 dark:border-slate-600 hover:border-emerald-500 text-transparent hover:text-emerald-500/50 bg-slate-50 dark:bg-slate-900'
                       }`}
                     >
-                      <CheckCircle2 className="w-4 h-4" />
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
                     </button>
 
-                    <div className="flex-1">
+                    <div className="flex-1 cursor-pointer" onClick={() => handleToggleStatus(item)}>
                       <h3
                         className={`text-sm sm:text-base font-extrabold ${
                           isCompleted

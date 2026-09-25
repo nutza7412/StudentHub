@@ -1,6 +1,6 @@
-import { collection, doc, getDocs, setDoc, deleteDoc, updateDoc, query, where, onSnapshot } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
-import { DailyGoal, HomeworkItem, QuizResult, StudySummary, TimetableItem, UserProfile } from '../types';
+import { collection, doc, getDocs, setDoc, deleteDoc, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from './firebase';
+import { DailyGoal, HomeworkItem, QuizResult, StudySummary, TimetableItem } from '../types';
 
 const STORAGE_KEYS = {
   PROFILE: 'studenthub_profile',
@@ -11,6 +11,33 @@ const STORAGE_KEYS = {
   QUIZ_RESULTS: 'studenthub_quiz_results',
   OFFLINE_QUEUE: 'studenthub_offline_queue',
 };
+
+// Date utilities using local time (avoids UTC timezone shift issues)
+export function getTodayString(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function getTomorrowString(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function getRelativeDayString(daysOffset: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + daysOffset);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 // Initial starter data for students
 export const INITIAL_TIMETABLE: Omit<TimetableItem, 'id' | 'userId' | 'createdAt'>[] = [
@@ -43,23 +70,6 @@ export const INITIAL_TIMETABLE: Omit<TimetableItem, 'id' | 'userId' | 'createdAt
   { dayOfWeek: 'Friday', subject: 'ภาษาไทยเชิงวิเคราะห์', subjectCode: 'ท31101', startTime: '10:30', endTime: '11:20', room: 'ห้อง 312', teacher: 'ครูวรรณา', color: 'emerald' },
   { dayOfWeek: 'Friday', subject: 'กิจกรรมชุมนุม Coding & AI', subjectCode: 'ก31902', startTime: '13:00', endTime: '14:50', room: 'ห้องคอม 1', teacher: 'ครูเกรียงศักดิ์', color: 'indigo' },
 ];
-
-export function getTodayString(): string {
-  const d = new Date();
-  return d.toISOString().split('T')[0];
-}
-
-export function getTomorrowString(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().split('T')[0];
-}
-
-export function getRelativeDayString(daysOffset: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + daysOffset);
-  return d.toISOString().split('T')[0];
-}
 
 export const INITIAL_HOMEWORK: Omit<HomeworkItem, 'id' | 'userId' | 'createdAt'>[] = [
   {
@@ -161,6 +171,78 @@ export const LocalStorage = {
   },
 };
 
+// Reactive pub-sub store: guarantees that state changes (e.g. checkbox toggles)
+// instantly notify all mounted components and triggers reactive re-renders
+type Listener<T> = (items: T[]) => void;
+
+class ReactiveStore {
+  private static goalsListeners = new Set<Listener<DailyGoal>>();
+  private static homeworkListeners = new Set<Listener<HomeworkItem>>();
+  private static timetableListeners = new Set<Listener<TimetableItem>>();
+  private static quizListeners = new Set<Listener<QuizResult>>();
+  private static summaryListeners = new Set<Listener<StudySummary>>();
+
+  static subscribeGoals(cb: Listener<DailyGoal>) {
+    this.goalsListeners.add(cb);
+    return () => {
+      this.goalsListeners.delete(cb);
+    };
+  }
+  static notifyGoals(items: DailyGoal[]) {
+    this.goalsListeners.forEach((cb) => {
+      try { cb(items); } catch (e) { console.error('Goals listener error:', e); }
+    });
+  }
+
+  static subscribeHomework(cb: Listener<HomeworkItem>) {
+    this.homeworkListeners.add(cb);
+    return () => {
+      this.homeworkListeners.delete(cb);
+    };
+  }
+  static notifyHomework(items: HomeworkItem[]) {
+    this.homeworkListeners.forEach((cb) => {
+      try { cb(items); } catch (e) { console.error('Homework listener error:', e); }
+    });
+  }
+
+  static subscribeTimetable(cb: Listener<TimetableItem>) {
+    this.timetableListeners.add(cb);
+    return () => {
+      this.timetableListeners.delete(cb);
+    };
+  }
+  static notifyTimetable(items: TimetableItem[]) {
+    this.timetableListeners.forEach((cb) => {
+      try { cb(items); } catch (e) { console.error('Timetable listener error:', e); }
+    });
+  }
+
+  static subscribeQuiz(cb: Listener<QuizResult>) {
+    this.quizListeners.add(cb);
+    return () => {
+      this.quizListeners.delete(cb);
+    };
+  }
+  static notifyQuiz(items: QuizResult[]) {
+    this.quizListeners.forEach((cb) => {
+      try { cb(items); } catch (e) { console.error('Quiz listener error:', e); }
+    });
+  }
+
+  static subscribeSummaries(cb: Listener<StudySummary>) {
+    this.summaryListeners.add(cb);
+    return () => {
+      this.summaryListeners.delete(cb);
+    };
+  }
+  static notifySummaries(items: StudySummary[]) {
+    this.summaryListeners.forEach((cb) => {
+      try { cb(items); } catch (e) { console.error('Summaries listener error:', e); }
+    });
+  }
+}
+
 // Firestore Sync & Mutation Service
 export class StudentDataService {
   /**
@@ -210,90 +292,115 @@ export class StudentDataService {
         }
       }
     } catch (error) {
-      console.warn('Firestore seeding failed, relying on local fallback:', error);
+      console.warn('Firestore seeding skipped or offline:', error);
     }
   }
 
-  // Timetable
+  // ================= TIMETABLE =================
   static subscribeTimetable(userId: string, onUpdate: (items: TimetableItem[]) => void) {
-    if (!userId || userId.startsWith('guest_')) {
-      const local = LocalStorage.get<TimetableItem[]>(STORAGE_KEYS.TIMETABLE, []);
-      onUpdate(local);
-      return () => {};
+    const cached = LocalStorage.get<TimetableItem[]>(STORAGE_KEYS.TIMETABLE, []);
+    onUpdate(cached);
+
+    const unsubReactive = ReactiveStore.subscribeTimetable(onUpdate);
+
+    let unsubFirestore = () => {};
+    if (userId && !userId.startsWith('guest_')) {
+      try {
+        const path = 'timetable';
+        const q = query(collection(db, path), where('userId', '==', userId));
+        unsubFirestore = onSnapshot(
+          q,
+          (snapshot) => {
+            const items: TimetableItem[] = [];
+            snapshot.forEach((docSnap) => items.push(docSnap.data() as TimetableItem));
+            if (items.length > 0) {
+              LocalStorage.set(STORAGE_KEYS.TIMETABLE, items);
+              onUpdate(items);
+            }
+          },
+          (error) => {
+            console.warn('Timetable snapshot warning:', error);
+          }
+        );
+      } catch (err) {
+        console.warn('Timetable query init warning:', err);
+      }
     }
 
-    const path = 'timetable';
-    const q = query(collection(db, path), where('userId', '==', userId));
-    return onSnapshot(
-      q,
-      (snapshot) => {
-        const items: TimetableItem[] = [];
-        snapshot.forEach((doc) => items.push(doc.data() as TimetableItem));
-        // Cache locally for offline
-        LocalStorage.set(STORAGE_KEYS.TIMETABLE, items);
-        onUpdate(items);
-      },
-      (error) => {
-        console.warn('Timetable snapshot error, fallback to local', error);
-        onUpdate(LocalStorage.get<TimetableItem[]>(STORAGE_KEYS.TIMETABLE, []));
-      }
-    );
+    return () => {
+      unsubReactive();
+      unsubFirestore();
+    };
   }
 
   static async saveTimetableItem(item: TimetableItem) {
-    // Update local cache
     const current = LocalStorage.get<TimetableItem[]>(STORAGE_KEYS.TIMETABLE, []);
     const existingIndex = current.findIndex((x) => x.id === item.id);
     const updated = existingIndex >= 0
       ? current.map((x) => (x.id === item.id ? item : x))
       : [...current, item];
     LocalStorage.set(STORAGE_KEYS.TIMETABLE, updated);
+    ReactiveStore.notifyTimetable(updated);
 
-    if (!item.userId.startsWith('guest_')) {
+    if (item.userId && !item.userId.startsWith('guest_')) {
       try {
         await setDoc(doc(db, 'timetable', item.id), item);
       } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `timetable/${item.id}`);
+        console.warn('Failed to sync timetable to Firestore:', error);
       }
     }
   }
 
   static async deleteTimetableItem(id: string, userId: string) {
     const current = LocalStorage.get<TimetableItem[]>(STORAGE_KEYS.TIMETABLE, []);
-    LocalStorage.set(STORAGE_KEYS.TIMETABLE, current.filter((x) => x.id !== id));
+    const updated = current.filter((x) => x.id !== id);
+    LocalStorage.set(STORAGE_KEYS.TIMETABLE, updated);
+    ReactiveStore.notifyTimetable(updated);
 
-    if (!userId.startsWith('guest_')) {
+    if (userId && !userId.startsWith('guest_')) {
       try {
         await deleteDoc(doc(db, 'timetable', id));
       } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, `timetable/${id}`);
+        console.warn('Failed to delete timetable item from Firestore:', error);
       }
     }
   }
 
-  // Homework
+  // ================= HOMEWORK =================
   static subscribeHomework(userId: string, onUpdate: (items: HomeworkItem[]) => void) {
-    if (!userId || userId.startsWith('guest_')) {
-      const local = LocalStorage.get<HomeworkItem[]>(STORAGE_KEYS.HOMEWORK, []);
-      onUpdate(local);
-      return () => {};
+    const cached = LocalStorage.get<HomeworkItem[]>(STORAGE_KEYS.HOMEWORK, []);
+    onUpdate(cached);
+
+    const unsubReactive = ReactiveStore.subscribeHomework(onUpdate);
+
+    let unsubFirestore = () => {};
+    if (userId && !userId.startsWith('guest_')) {
+      try {
+        const path = 'homework';
+        const q = query(collection(db, path), where('userId', '==', userId));
+        unsubFirestore = onSnapshot(
+          q,
+          (snapshot) => {
+            const items: HomeworkItem[] = [];
+            snapshot.forEach((docSnap) => items.push(docSnap.data() as HomeworkItem));
+            if (items.length > 0) {
+              LocalStorage.set(STORAGE_KEYS.HOMEWORK, items);
+              onUpdate(items);
+            }
+          },
+          (error) => {
+            console.warn('Homework snapshot warning:', error);
+          }
+        );
+      } catch (err) {
+        console.warn('Homework query init warning:', err);
+      }
     }
 
-    const path = 'homework';
-    const q = query(collection(db, path), where('userId', '==', userId));
-    return onSnapshot(
-      q,
-      (snapshot) => {
-        const items: HomeworkItem[] = [];
-        snapshot.forEach((doc) => items.push(doc.data() as HomeworkItem));
-        LocalStorage.set(STORAGE_KEYS.HOMEWORK, items);
-        onUpdate(items);
-      },
-      (error) => {
-        console.warn('Homework snapshot error, fallback to local', error);
-        onUpdate(LocalStorage.get<HomeworkItem[]>(STORAGE_KEYS.HOMEWORK, []));
-      }
-    );
+    return () => {
+      unsubReactive();
+      unsubFirestore();
+    };
   }
 
   static async saveHomeworkItem(item: HomeworkItem) {
@@ -303,52 +410,67 @@ export class StudentDataService {
       ? current.map((x) => (x.id === item.id ? item : x))
       : [...current, item];
     LocalStorage.set(STORAGE_KEYS.HOMEWORK, updated);
+    ReactiveStore.notifyHomework(updated);
 
-    if (!item.userId.startsWith('guest_')) {
+    if (item.userId && !item.userId.startsWith('guest_')) {
       try {
         await setDoc(doc(db, 'homework', item.id), item);
       } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `homework/${item.id}`);
+        console.warn('Failed to sync homework to Firestore:', error);
       }
     }
   }
 
   static async deleteHomeworkItem(id: string, userId: string) {
     const current = LocalStorage.get<HomeworkItem[]>(STORAGE_KEYS.HOMEWORK, []);
-    LocalStorage.set(STORAGE_KEYS.HOMEWORK, current.filter((x) => x.id !== id));
+    const updated = current.filter((x) => x.id !== id);
+    LocalStorage.set(STORAGE_KEYS.HOMEWORK, updated);
+    ReactiveStore.notifyHomework(updated);
 
-    if (!userId.startsWith('guest_')) {
+    if (userId && !userId.startsWith('guest_')) {
       try {
         await deleteDoc(doc(db, 'homework', id));
       } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, `homework/${id}`);
+        console.warn('Failed to delete homework item from Firestore:', error);
       }
     }
   }
 
-  // Daily Goals
+  // ================= DAILY GOALS =================
   static subscribeDailyGoals(userId: string, onUpdate: (items: DailyGoal[]) => void) {
-    if (!userId || userId.startsWith('guest_')) {
-      const local = LocalStorage.get<DailyGoal[]>(STORAGE_KEYS.GOALS, []);
-      onUpdate(local);
-      return () => {};
+    const cached = LocalStorage.get<DailyGoal[]>(STORAGE_KEYS.GOALS, []);
+    onUpdate(cached);
+
+    const unsubReactive = ReactiveStore.subscribeGoals(onUpdate);
+
+    let unsubFirestore = () => {};
+    if (userId && !userId.startsWith('guest_')) {
+      try {
+        const path = 'dailyGoals';
+        const q = query(collection(db, path), where('userId', '==', userId));
+        unsubFirestore = onSnapshot(
+          q,
+          (snapshot) => {
+            const items: DailyGoal[] = [];
+            snapshot.forEach((docSnap) => items.push(docSnap.data() as DailyGoal));
+            if (items.length > 0) {
+              LocalStorage.set(STORAGE_KEYS.GOALS, items);
+              onUpdate(items);
+            }
+          },
+          (error) => {
+            console.warn('Daily goals snapshot warning:', error);
+          }
+        );
+      } catch (err) {
+        console.warn('Daily goals query init warning:', err);
+      }
     }
 
-    const path = 'dailyGoals';
-    const q = query(collection(db, path), where('userId', '==', userId));
-    return onSnapshot(
-      q,
-      (snapshot) => {
-        const items: DailyGoal[] = [];
-        snapshot.forEach((doc) => items.push(doc.data() as DailyGoal));
-        LocalStorage.set(STORAGE_KEYS.GOALS, items);
-        onUpdate(items);
-      },
-      (error) => {
-        console.warn('Daily goals snapshot error, fallback to local', error);
-        onUpdate(LocalStorage.get<DailyGoal[]>(STORAGE_KEYS.GOALS, []));
-      }
-    );
+    return () => {
+      unsubReactive();
+      unsubFirestore();
+    };
   }
 
   static async saveDailyGoal(item: DailyGoal) {
@@ -358,101 +480,132 @@ export class StudentDataService {
       ? current.map((x) => (x.id === item.id ? item : x))
       : [...current, item];
     LocalStorage.set(STORAGE_KEYS.GOALS, updated);
+    ReactiveStore.notifyGoals(updated);
 
-    if (!item.userId.startsWith('guest_')) {
+    if (item.userId && !item.userId.startsWith('guest_')) {
       try {
         await setDoc(doc(db, 'dailyGoals', item.id), item);
       } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `dailyGoals/${item.id}`);
+        console.warn('Failed to sync daily goal to Firestore:', error);
       }
     }
   }
 
   static async deleteDailyGoal(id: string, userId: string) {
     const current = LocalStorage.get<DailyGoal[]>(STORAGE_KEYS.GOALS, []);
-    LocalStorage.set(STORAGE_KEYS.GOALS, current.filter((x) => x.id !== id));
+    const updated = current.filter((x) => x.id !== id);
+    LocalStorage.set(STORAGE_KEYS.GOALS, updated);
+    ReactiveStore.notifyGoals(updated);
 
-    if (!userId.startsWith('guest_')) {
+    if (userId && !userId.startsWith('guest_')) {
       try {
         await deleteDoc(doc(db, 'dailyGoals', id));
       } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, `dailyGoals/${id}`);
+        console.warn('Failed to delete daily goal from Firestore:', error);
       }
     }
   }
 
-  // Quiz Results & Summaries
+  // ================= QUIZ RESULTS =================
   static subscribeQuizResults(userId: string, onUpdate: (items: QuizResult[]) => void) {
-    if (!userId || userId.startsWith('guest_')) {
-      const local = LocalStorage.get<QuizResult[]>(STORAGE_KEYS.QUIZ_RESULTS, []);
-      onUpdate(local);
-      return () => {};
+    const cached = LocalStorage.get<QuizResult[]>(STORAGE_KEYS.QUIZ_RESULTS, []);
+    onUpdate(cached);
+
+    const unsubReactive = ReactiveStore.subscribeQuiz(onUpdate);
+
+    let unsubFirestore = () => {};
+    if (userId && !userId.startsWith('guest_')) {
+      try {
+        const path = 'quizResults';
+        const q = query(collection(db, path), where('userId', '==', userId));
+        unsubFirestore = onSnapshot(
+          q,
+          (snapshot) => {
+            const items: QuizResult[] = [];
+            snapshot.forEach((docSnap) => items.push(docSnap.data() as QuizResult));
+            if (items.length > 0) {
+              LocalStorage.set(STORAGE_KEYS.QUIZ_RESULTS, items);
+              onUpdate(items);
+            }
+          },
+          (error) => {
+            console.warn('Quiz results snapshot warning:', error);
+          }
+        );
+      } catch (err) {
+        console.warn('Quiz query init warning:', err);
+      }
     }
 
-    const path = 'quizResults';
-    const q = query(collection(db, path), where('userId', '==', userId));
-    return onSnapshot(
-      q,
-      (snapshot) => {
-        const items: QuizResult[] = [];
-        snapshot.forEach((doc) => items.push(doc.data() as QuizResult));
-        LocalStorage.set(STORAGE_KEYS.QUIZ_RESULTS, items);
-        onUpdate(items);
-      },
-      (error) => {
-        console.warn('Quiz results snapshot error', error);
-        onUpdate(LocalStorage.get<QuizResult[]>(STORAGE_KEYS.QUIZ_RESULTS, []));
-      }
-    );
+    return () => {
+      unsubReactive();
+      unsubFirestore();
+    };
   }
 
   static async saveQuizResult(item: QuizResult) {
     const current = LocalStorage.get<QuizResult[]>(STORAGE_KEYS.QUIZ_RESULTS, []);
-    LocalStorage.set(STORAGE_KEYS.QUIZ_RESULTS, [item, ...current]);
+    const updated = [item, ...current.filter((x) => x.id !== item.id)];
+    LocalStorage.set(STORAGE_KEYS.QUIZ_RESULTS, updated);
+    ReactiveStore.notifyQuiz(updated);
 
-    if (!item.userId.startsWith('guest_')) {
+    if (item.userId && !item.userId.startsWith('guest_')) {
       try {
         await setDoc(doc(db, 'quizResults', item.id), item);
       } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `quizResults/${item.id}`);
+        console.warn('Failed to sync quiz result to Firestore:', error);
       }
     }
   }
 
-  // Study Summaries
+  // ================= STUDY SUMMARIES =================
   static subscribeStudySummaries(userId: string, onUpdate: (items: StudySummary[]) => void) {
-    if (!userId || userId.startsWith('guest_')) {
-      const local = LocalStorage.get<StudySummary[]>(STORAGE_KEYS.SUMMARIES, []);
-      onUpdate(local);
-      return () => {};
+    const cached = LocalStorage.get<StudySummary[]>(STORAGE_KEYS.SUMMARIES, []);
+    onUpdate(cached);
+
+    const unsubReactive = ReactiveStore.subscribeSummaries(onUpdate);
+
+    let unsubFirestore = () => {};
+    if (userId && !userId.startsWith('guest_')) {
+      try {
+        const path = 'studySummaries';
+        const q = query(collection(db, path), where('userId', '==', userId));
+        unsubFirestore = onSnapshot(
+          q,
+          (snapshot) => {
+            const items: StudySummary[] = [];
+            snapshot.forEach((docSnap) => items.push(docSnap.data() as StudySummary));
+            if (items.length > 0) {
+              LocalStorage.set(STORAGE_KEYS.SUMMARIES, items);
+              onUpdate(items);
+            }
+          },
+          (error) => {
+            console.warn('Study summaries snapshot warning:', error);
+          }
+        );
+      } catch (err) {
+        console.warn('Study summaries query init warning:', err);
+      }
     }
 
-    const path = 'studySummaries';
-    const q = query(collection(db, path), where('userId', '==', userId));
-    return onSnapshot(
-      q,
-      (snapshot) => {
-        const items: StudySummary[] = [];
-        snapshot.forEach((doc) => items.push(doc.data() as StudySummary));
-        LocalStorage.set(STORAGE_KEYS.SUMMARIES, items);
-        onUpdate(items);
-      },
-      (error) => {
-        console.warn('Summaries snapshot error', error);
-        onUpdate(LocalStorage.get<StudySummary[]>(STORAGE_KEYS.SUMMARIES, []));
-      }
-    );
+    return () => {
+      unsubReactive();
+      unsubFirestore();
+    };
   }
 
   static async saveStudySummary(item: StudySummary) {
     const current = LocalStorage.get<StudySummary[]>(STORAGE_KEYS.SUMMARIES, []);
-    LocalStorage.set(STORAGE_KEYS.SUMMARIES, [item, ...current]);
+    const updated = [item, ...current.filter((x) => x.id !== item.id)];
+    LocalStorage.set(STORAGE_KEYS.SUMMARIES, updated);
+    ReactiveStore.notifySummaries(updated);
 
-    if (!item.userId.startsWith('guest_')) {
+    if (item.userId && !item.userId.startsWith('guest_')) {
       try {
         await setDoc(doc(db, 'studySummaries', item.id), item);
       } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `studySummaries/${item.id}`);
+        console.warn('Failed to sync study summary to Firestore:', error);
       }
     }
   }

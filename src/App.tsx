@@ -143,21 +143,19 @@ export default function App() {
       setDailyGoals(existingGoals);
     }
 
-    // 2. Subscribe to Firestore (student03)
+    // 2. Subscribe to Firestore and reactive store
     const unsubTimetable = StudentDataService.subscribeTimetable(user.uid, (items) => {
-      if (items.length > 0) setTimetable(items);
+      setTimetable(items);
     });
 
     const unsubHomework = StudentDataService.subscribeHomework(user.uid, (items) => {
-      if (items.length > 0) {
-        setHomework(items);
-        // Check for urgent / overdue alerts
-        NotificationService.checkAndAlertPendingHomework(items);
-      }
+      setHomework(items);
+      // Check for urgent / overdue alerts
+      NotificationService.checkAndAlertPendingHomework(items);
     });
 
     const unsubGoals = StudentDataService.subscribeDailyGoals(user.uid, (items) => {
-      if (items.length > 0) setDailyGoals(items);
+      setDailyGoals(items);
     });
 
     const unsubQuiz = StudentDataService.subscribeQuizResults(user.uid, (items) => {
@@ -247,6 +245,7 @@ export default function App() {
               isAddModalOpen={isAddHomeworkOpen}
               setIsAddModalOpen={setIsAddHomeworkOpen}
               onOpenAiPlanner={() => setActiveTab('ai-planner')}
+              onUpdateHomework={setHomework}
             />
           )}
 
@@ -255,6 +254,7 @@ export default function App() {
               user={user}
               dailyGoals={dailyGoals}
               homework={homework}
+              onUpdateDailyGoals={setDailyGoals}
             />
           )}
 
